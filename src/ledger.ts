@@ -6,6 +6,7 @@ import type {
     Day,
     LedgerEntry,
     LedgerEvent,
+    ProcessingResult,
 } from "./types.js";
 
 export class Ledger {
@@ -13,6 +14,7 @@ export class Ledger {
     private readonly events: LedgerEvent[] = [];
     private readonly entries: LedgerEntry[] = [];
     private readonly eventIds = new Set<string>();
+    private readonly results: ProcessingResult[] = [];
 
     // Authorization
     private readonly authorizations =
@@ -101,76 +103,164 @@ export class Ledger {
         );
     }
 
-    public process(event: LedgerEvent): void {
 
-        // Validation Checks
+    public getResults(): ProcessingResult[] {
+        const results: ProcessingResult[] = [];
+
+        for (const result of this.results) {
+            results.push({ ...result });
+        }
+
+        return results;
+    }
+
+
+    public process(event: LedgerEvent): ProcessingResult {
+        const reject = (message: string): ProcessingResult => {
+            const result: ProcessingResult = {
+                eventId: event.id,
+                accepted: false,
+                message,
+            };
+
+            this.results.push(Object.freeze({ ...result }));
+            return result;
+        };
+
         if (this.eventIds.has(event.id)) {
-            throw new Error(`Duplicate event ID: ${event.id}`);
+            return reject(`Duplicate event ID: ${event.id}`);
         }
 
         if (!this.accounts.has(event.accountId)) {
-            throw new Error(`Unknown account: ${event.accountId}`);
+            return reject(`Unknown account: ${event.accountId}`);
         }
 
         if (event.amount <= 0n) {
-            throw new Error("Amount must be positive");
+            return reject("Amount must be positive");
         }
 
-        if (event.type === "AUTHORIZATION") {
-            if (this.authorizations.has(event.authorizationId)) {
-                throw new Error(
-                    `Duplicate authorization ID: ${event.authorizationId}`,
-                );
+        let entry: LedgerEntry | undefined;
+        let nextAuthorization: AuthorizationState | undefined;
+        let message = "";
+
+        switch (event.type) {
+            case "CREDIT":
+            case "DEBIT": {
+                entry = {
+                    id: `entry-${event.id}`,
+                    eventId: event.id,
+                    accountId: event.accountId,
+                    type: event.type,
+                    amount:
+                        event.type === "CREDIT"
+                            ? event.amount
+                            : -event.amount,
+                    bookedDay: event.bookedDay,
+                    valueDate: event.valueDate,
+                };
+
+                message = `${event.type} posted`;
+                break;
             }
 
-            const available = this.getAvailableBalance(
-                event.accountId,
-                event.bookedDay,
-            );
+            case "AUTHORIZATION": {
+                if (this.authorizations.has(event.authorizationId)) {
+                    return reject(
+                        `Duplicate authorization ID: ${event.authorizationId}`,
+                    );
+                }
 
-            const status =
-                available >= event.amount ? "APPROVED" : "DECLINED";
+                const available = this.getAvailableBalance(
+                    event.accountId,
+                    event.bookedDay,
+                );
 
-            const authorization: AuthorizationState = {
-                authorizationId: event.authorizationId,
-                accountId: event.accountId,
-                amount: event.amount,
-                status,
-            };
+                const status =
+                    available >= event.amount
+                        ? "APPROVED"
+                        : "DECLINED";
 
-            this.authorizations.set(
-                event.authorizationId,
-                Object.freeze({ ...authorization }),
-            );
+                nextAuthorization = {
+                    authorizationId: event.authorizationId,
+                    accountId: event.accountId,
+                    amount: event.amount,
+                    status,
+                };
 
-            // Both approval and decline are valid processing outcomes.
-            this.events.push(Object.freeze({ ...event }));
-            this.eventIds.add(event.id);
+                message = `Authorization ${status.toLowerCase()}`;
+                break;
+            }
 
-            return;
+            case "SETTLEMENT": {
+                const authorization = this.authorizations.get(
+                    event.authorizationId,
+                );
+
+                if (!authorization) {
+                    return reject(
+                        `Unknown authorization: ${event.authorizationId}`,
+                    );
+                }
+
+                if (authorization.accountId !== event.accountId) {
+                    return reject("Authorization account mismatch");
+                }
+
+                if (authorization.status !== "APPROVED") {
+                    return reject(
+                        `Authorization is not active: ${event.authorizationId}`,
+                    );
+                }
+
+                if (event.amount > authorization.amount) {
+                    return reject(
+                        "Settlement exceeds authorized amount",
+                    );
+                }
+
+                entry = {
+                    id: `entry-${event.id}`,
+                    eventId: event.id,
+                    accountId: event.accountId,
+                    type: "SETTLEMENT",
+                    amount: -event.amount,
+                    bookedDay: event.bookedDay,
+                    valueDate: event.valueDate,
+                };
+
+                nextAuthorization = {
+                    ...authorization,
+                    status: "SETTLED",
+                    settlementAmount: event.amount,
+                };
+
+                message = "Settlement posted";
+                break;
+            }
         }
 
-        if (event.type === "CREDIT" || event.type === "DEBIT") {
-            const signedAmount =
-                event.type === "CREDIT"
-                    ? event.amount
-                    : -event.amount;
+        // Commit only after the event has passed validation.
+        this.events.push(Object.freeze({ ...event }));
+        this.eventIds.add(event.id);
 
-            const entry: LedgerEntry = {
-                id: `entry-${event.id}`,
-                eventId: event.id,
-                accountId: event.accountId,
-                type: event.type,
-                amount: signedAmount,
-                bookedDay: event.bookedDay,
-                valueDate: event.valueDate,
-            };
-
-            // Commit only after all validations succeed.
-            this.events.push(Object.freeze({ ...event }));
+        if (entry) {
             this.entries.push(Object.freeze({ ...entry }));
-            this.eventIds.add(event.id);
-
         }
+
+        if (nextAuthorization) {
+            this.authorizations.set(
+                nextAuthorization.authorizationId,
+                Object.freeze({ ...nextAuthorization }),
+            );
+        }
+
+        const result: ProcessingResult = {
+            eventId: event.id,
+            accepted: true,
+            message,
+        };
+
+        this.results.push(Object.freeze({ ...result }));
+        return result;
     }
 }

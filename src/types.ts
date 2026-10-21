@@ -11,7 +11,7 @@ export interface Account {
     openingBalance: bigint;
 }
 
-export type EventType = "CREDIT" | "DEBIT" | "AUTHORIZATION";
+export type EventType = "CREDIT" | "DEBIT" | "AUTHORIZATION" | "SETTLEMENT";
 
 export interface BaseEvent {
     id: string;
@@ -37,10 +37,18 @@ export interface AuthorizationEvent extends BaseEvent {
     amount: bigint;
 }
 
+// Settlement Event
+export interface SettlementEvent extends BaseEvent {
+    type: "SETTLEMENT";
+    authorizationId: string;
+    amount: bigint;
+}
+
 export type LedgerEvent =
     | CreditEvent
     | DebitEvent
-    | AuthorizationEvent;
+    | AuthorizationEvent
+    | SettlementEvent;
 
 export interface LedgerEntry {
     id: string;
@@ -53,11 +61,18 @@ export interface LedgerEntry {
 }
 
 // Authorization Types
-export type AuthorizationStatus = "APPROVED" | "DECLINED";
+export type AuthorizationStatus = "APPROVED" | "DECLINED" | "SETTLED";
 
 export interface AuthorizationState {
     authorizationId: string;
     accountId: AccountId;
     amount: bigint;
     status: AuthorizationStatus;
+    settlementAmount?: bigint;
+}
+
+export interface ProcessingResult {
+    eventId: string;
+    accepted: boolean;
+    message: string;
 }

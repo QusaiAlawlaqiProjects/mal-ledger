@@ -2,7 +2,7 @@
 import { describe, expect, it } from "vitest";
 import { Ledger } from "../src/ledger.js";
 
-function createLedger() {
+function createLedger(): Ledger {
     return new Ledger([
         {
             id: "ACC-001",
@@ -16,7 +16,7 @@ describe("Basic ledger", () => {
     it("calculates the balance from credits and debits", () => {
         const ledger = createLedger();
 
-        ledger.process({
+        const e1 = ledger.process({
             id: "E1",
             type: "CREDIT",
             accountId: "ACC-001",
@@ -25,7 +25,7 @@ describe("Basic ledger", () => {
             valueDate: 1,
         });
 
-        ledger.process({
+        const e2 = ledger.process({
             id: "E2",
             type: "DEBIT",
             accountId: "ACC-001",
@@ -34,10 +34,12 @@ describe("Basic ledger", () => {
             valueDate: 1,
         });
 
-        expect(ledger.getBalance("ACC-001", 1))
-            .toBe(25000n);
+        expect(e1.accepted).toBe(true);
+        expect(e2.accepted).toBe(true);
 
+        expect(ledger.getBalance("ACC-001", 1)).toBe(25000n);
         expect(ledger.getEntries()).toHaveLength(2);
+        expect(ledger.getEvents()).toHaveLength(2);
     });
 
     it("rejects duplicate event IDs", () => {
@@ -54,30 +56,55 @@ describe("Basic ledger", () => {
 
         ledger.process(event);
 
-        expect(() => ledger.process(event))
-            .toThrow("Duplicate event ID");
+        const result = ledger.process(event);
+
+        expect(result.accepted).toBe(false);
+        expect(result.message).toContain("Duplicate event ID");
 
         expect(ledger.getEntries()).toHaveLength(1);
+        expect(ledger.getEvents()).toHaveLength(1);
+        expect(ledger.getBalance("ACC-001", 1)).toBe(120000n);
     });
 
     it("rejects non-positive amounts", () => {
         const ledger = createLedger();
 
-        expect(() =>
-            ledger.process({
-                id: "E1",
-                type: "CREDIT",
-                accountId: "ACC-001",
-                amount: 0n,
-                bookedDay: 1,
-                valueDate: 1,
-            }),
-        ).toThrow("Amount must be positive");
+        const result = ledger.process({
+            id: "E1",
+            type: "CREDIT",
+            accountId: "ACC-001",
+            amount: 0n,
+            bookedDay: 1,
+            valueDate: 1,
+        });
+
+        expect(result.accepted).toBe(false);
+        expect(result.message).toContain("Amount must be positive");
 
         expect(ledger.getEntries()).toHaveLength(0);
+        expect(ledger.getEvents()).toHaveLength(0);
     });
 
-    it("keeps financial entries append-only", () => {
+    it("rejects unknown accounts", () => {
+        const ledger = createLedger();
+
+        const result = ledger.process({
+            id: "E1",
+            type: "CREDIT",
+            accountId: "ACC-002",
+            amount: 10000n,
+            bookedDay: 1,
+            valueDate: 1,
+        });
+
+        expect(result.accepted).toBe(false);
+        expect(result.message).toContain("Unknown account");
+
+        expect(ledger.getEntries()).toHaveLength(0);
+        expect(ledger.getEvents()).toHaveLength(0);
+    });
+
+    it("protects recorded entries from external modification", () => {
         const ledger = createLedger();
 
         ledger.process({
@@ -92,7 +119,7 @@ describe("Basic ledger", () => {
         const entries = ledger.getEntries();
         entries[0]!.amount = 1n;
 
-        expect(ledger.getEntries()[0]!.amount)
-            .toBe(120000n);
+        expect(ledger.getEntries()[0]!.amount).toBe(120000n);
+        expect(ledger.getBalance("ACC-001", 1)).toBe(120000n);
     });
 });

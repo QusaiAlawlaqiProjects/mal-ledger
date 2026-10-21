@@ -2,7 +2,7 @@
 import { describe, expect, it } from "vitest";
 import { Ledger } from "../src/ledger.js";
 
-function createFundedLedger() {
+function createFundedLedger(): Ledger {
     const ledger = new Ledger([
         {
             id: "ACC-001",
@@ -36,7 +36,7 @@ describe("Authorization holds", () => {
     it("approves a hold when funds are sufficient", () => {
         const ledger = createFundedLedger();
 
-        ledger.process({
+        const result = ledger.process({
             id: "E3",
             type: "AUTHORIZATION",
             accountId: "ACC-001",
@@ -46,26 +46,23 @@ describe("Authorization holds", () => {
             valueDate: 2,
         });
 
+        expect(result.accepted).toBe(true);
         expect(ledger.getAuthorization("Auth-A")?.status)
             .toBe("APPROVED");
 
-        expect(ledger.getBalance("ACC-001", 2))
-            .toBe(25000n);
+        expect(ledger.getBalance("ACC-001", 2)).toBe(25000n);
+        expect(ledger.getActiveHolds("ACC-001")).toBe(20000n);
+        expect(ledger.getAvailableBalance("ACC-001", 2)).toBe(5000n);
 
-        expect(ledger.getActiveHolds("ACC-001"))
-            .toBe(20000n);
-
-        expect(ledger.getAvailableBalance("ACC-001", 2))
-            .toBe(5000n);
-
-        // Authorization does not post a financial entry.
+        // Holds do not affect the financial ledger.
         expect(ledger.getEntries()).toHaveLength(2);
+        expect(ledger.getEvents()).toHaveLength(3);
     });
 
-    it("declines a hold when funds are insufficient", () => {
+    it("records a declined authorization without reserving funds", () => {
         const ledger = createFundedLedger();
 
-        ledger.process({
+        const result = ledger.process({
             id: "E3",
             type: "AUTHORIZATION",
             accountId: "ACC-001",
@@ -75,17 +72,17 @@ describe("Authorization holds", () => {
             valueDate: 2,
         });
 
+        // The request was processed, but the authorization declined.
+        expect(result.accepted).toBe(true);
         expect(ledger.getAuthorization("Auth-A")?.status)
             .toBe("DECLINED");
 
-        expect(ledger.getActiveHolds("ACC-001"))
-            .toBe(0n);
-
-        expect(ledger.getBalance("ACC-001", 2))
-            .toBe(25000n);
+        expect(ledger.getActiveHolds("ACC-001")).toBe(0n);
+        expect(ledger.getAvailableBalance("ACC-001", 2)).toBe(25000n);
+        expect(ledger.getEntries()).toHaveLength(2);
     });
 
-    it("prevents two holds from reserving the same funds", () => {
+    it("prevents holds from exceeding available funds", () => {
         const ledger = createFundedLedger();
 
         ledger.process({
@@ -98,8 +95,8 @@ describe("Authorization holds", () => {
             valueDate: 2,
         });
 
-        ledger.process({
-            id: "E4-test",
+        const result = ledger.process({
+            id: "E3-test",
             type: "AUTHORIZATION",
             accountId: "ACC-001",
             authorizationId: "Auth-B",
@@ -108,13 +105,43 @@ describe("Authorization holds", () => {
             valueDate: 2,
         });
 
+        expect(result.accepted).toBe(true);
         expect(ledger.getAuthorization("Auth-A")?.status)
             .toBe("APPROVED");
-
         expect(ledger.getAuthorization("Auth-B")?.status)
             .toBe("DECLINED");
 
-        expect(ledger.getAvailableBalance("ACC-001", 2))
-            .toBe(5000n);
+        expect(ledger.getActiveHolds("ACC-001")).toBe(20000n);
+        expect(ledger.getAvailableBalance("ACC-001", 2)).toBe(5000n);
+    });
+
+    it("rejects duplicate authorization IDs", () => {
+        const ledger = createFundedLedger();
+
+        ledger.process({
+            id: "E3",
+            type: "AUTHORIZATION",
+            accountId: "ACC-001",
+            authorizationId: "Auth-A",
+            amount: 20000n,
+            bookedDay: 2,
+            valueDate: 2,
+        });
+
+        const result = ledger.process({
+            id: "E3-test",
+            type: "AUTHORIZATION",
+            accountId: "ACC-001",
+            authorizationId: "Auth-A",
+            amount: 10000n,
+            bookedDay: 2,
+            valueDate: 2,
+        });
+
+        expect(result.accepted).toBe(false);
+        expect(result.message).toContain("Duplicate authorization ID");
+
+        expect(ledger.getActiveHolds("ACC-001")).toBe(20000n);
+        expect(ledger.getEvents()).toHaveLength(3);
     });
 });
