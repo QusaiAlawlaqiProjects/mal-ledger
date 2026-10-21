@@ -1,0 +1,1 @@
+console.log("Mal Ledger — Project initialized");

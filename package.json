@@ -1,0 +1,31 @@
+{
+  "name": "mal-ledger",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+  "dev": "tsx src/main.ts",
+  "test": "vitest run",
+  "test:watch": "vitest",
+  "typecheck": "tsc --noEmit",
+  "build": "tsc"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/QusaiAlawlaqiProjects/mal-ledger.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "module",
+  "bugs": {
+    "url": "https://github.com/QusaiAlawlaqiProjects/mal-ledger/issues"
+  },
+  "homepage": "https://github.com/QusaiAlawlaqiProjects/mal-ledger#readme",
+  "devDependencies": {
+    "@types/node": "^26.6.5",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.5"
+  }
+}
