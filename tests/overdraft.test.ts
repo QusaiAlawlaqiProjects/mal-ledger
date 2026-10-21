@@ -65,7 +65,6 @@ describe("Overdraft fees", () => {
     it("assesses and refunds overdraft fees after E7 and E9", () => {
         const ledger = createLedger();
 
-        // E1 — Credit AED 1,200
         ledger.process({
             id: "E1",
             type: "CREDIT",
@@ -75,7 +74,6 @@ describe("Overdraft fees", () => {
             valueDate: 1,
         });
 
-        // E2 — Debit AED 950
         ledger.process({
             id: "E2",
             type: "DEBIT",
@@ -85,7 +83,6 @@ describe("Overdraft fees", () => {
             valueDate: 1,
         });
 
-        // E3 — Authorization hold AED 200
         ledger.process({
             id: "E3",
             type: "AUTHORIZATION",
@@ -96,7 +93,6 @@ describe("Overdraft fees", () => {
             valueDate: 2,
         });
 
-        // E4 — Credit AED 400
         ledger.process({
             id: "E4",
             type: "CREDIT",
@@ -106,7 +102,6 @@ describe("Overdraft fees", () => {
             valueDate: 3,
         });
 
-        // E5 — Settle Auth-A for AED 185
         ledger.process({
             id: "E5",
             type: "SETTLEMENT",
@@ -117,7 +112,6 @@ describe("Overdraft fees", () => {
             valueDate: 4,
         });
 
-        // E6 — Unknown authorization, must be rejected
         const e6 = ledger.process({
             id: "E6",
             type: "SETTLEMENT",
@@ -130,7 +124,6 @@ describe("Overdraft fees", () => {
 
         expect(e6.accepted).toBe(false);
 
-        // E7 — Backdated debit AED 620
         const e7 = ledger.process({
             id: "E7",
             type: "DEBIT",
@@ -142,7 +135,6 @@ describe("Overdraft fees", () => {
 
         expect(e7.accepted).toBe(true);
 
-        // E8 — Authorization Auth-B must decline
         const e8 = ledger.process({
             id: "E8",
             type: "AUTHORIZATION",
@@ -157,29 +149,24 @@ describe("Overdraft fees", () => {
         expect(ledger.getAuthorization("Auth-B")?.status)
             .toBe("DECLINED");
 
-        // Reconcile overdraft fees using Day 5 knowledge.
         ledger.reconcileOverdraftFees("ACC-001", 5);
 
         const fees = ledger.getEntries().filter(
             (entry) => entry.type === "OVERDRAFT_FEE",
         );
 
-        // Negative balances on Days 2, 4, and 5.
         expect(fees).toHaveLength(3);
-
         expect(fees.map((entry) => entry.valueDate))
             .toEqual([2, 4, 5]);
 
-        // AED -155 minus three AED 25 fees = AED -230.
         expect(ledger.getBalance("ACC-001", 5))
             .toBe(-23000n);
 
-        // Repeated reconciliation should not create duplicate fees.
+        // Reconciliation must not duplicate fees.
         ledger.reconcileOverdraftFees("ACC-001", 5);
 
         expect(ledger.getEntries()).toHaveLength(8);
 
-        // E9 — Reverse E7 on Day 6
         const e9 = ledger.process({
             id: "E9",
             type: "REVERSAL",
@@ -191,7 +178,6 @@ describe("Overdraft fees", () => {
 
         expect(e9.accepted).toBe(true);
 
-        // Reconcile again after the reversal.
         ledger.reconcileOverdraftFees("ACC-001", 6);
 
         const refunds = ledger.getEntries().filter(
@@ -199,20 +185,76 @@ describe("Overdraft fees", () => {
         );
 
         expect(refunds).toHaveLength(3);
-
         expect(refunds.map((entry) => entry.valueDate))
             .toEqual([2, 4, 5]);
 
-        // Original fees remain, but refunds offset them.
         expect(ledger.getBalance("ACC-001", 6))
             .toBe(46500n);
 
-        // 5 original financial entries + 3 fees
-        // + 1 reversal + 3 refunds = 12 entries.
         expect(ledger.getEntries()).toHaveLength(12);
 
-        // Auth-B must remain declined after E9.
         expect(ledger.getAuthorization("Auth-B")?.status)
             .toBe("DECLINED");
+    });
+
+    it("includes earlier fees when determining later overdrafts", () => {
+        const ledger = createLedger();
+
+        // Day 1: AED 10.00
+        ledger.process({
+            id: "T1",
+            type: "CREDIT",
+            accountId: "ACC-001",
+            amount: 1000n,
+            bookedDay: 1,
+            valueDate: 1,
+        });
+
+        // Day 2: AED -5.00 before fees.
+        ledger.process({
+            id: "T2",
+            type: "DEBIT",
+            accountId: "ACC-001",
+            amount: 1500n,
+            bookedDay: 2,
+            valueDate: 2,
+        });
+
+        // Day 3: AED +15.00 without fees,
+        // but AED -10.00 after the Day 2 fee.
+        ledger.process({
+            id: "T3",
+            type: "CREDIT",
+            accountId: "ACC-001",
+            amount: 2000n,
+            bookedDay: 3,
+            valueDate: 3,
+        });
+
+        ledger.reconcileOverdraftFees("ACC-001", 3);
+
+        const fees = ledger.getEntries().filter(
+            (entry) => entry.type === "OVERDRAFT_FEE",
+        );
+
+        // Day 2 and Day 3 both require fees.
+        expect(fees).toHaveLength(2);
+
+        expect(fees.map((entry) => entry.valueDate))
+            .toEqual([2, 3]);
+
+        expect(ledger.getBalance("ACC-001", 1))
+            .toBe(1000n);
+
+        expect(ledger.getBalance("ACC-001", 2))
+            .toBe(-3000n);
+
+        expect(ledger.getBalance("ACC-001", 3))
+            .toBe(-3500n);
+
+        // Running reconciliation again must be safe.
+        ledger.reconcileOverdraftFees("ACC-001", 3);
+
+        expect(ledger.getEntries()).toHaveLength(5);
     });
 });
