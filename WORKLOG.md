@@ -29,3 +29,7 @@ Updates:
 Time: 21/10/2026 - 10:48pm 
 Updates: 
 - E7: Quickly tested the backdated debit and confirmed our existing ledger already supports value-dated transactions without any code changes.
+
+Time: 21/10/2026 - 10:52pm 
+Updates: 
+- E8: Verified that the existing authorization logic correctly declines Auth-B due to insufficient funds, without requiring any code changes.

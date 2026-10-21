@@ -83,12 +83,19 @@ const e7 = ledger.process({
     valueDate: 2,
 });
 
-console.log("\nE7 — Backdated Debit");
-console.log("Result:", e7);
+const e8 = ledger.process({
+    id: "E8",
+    type: "AUTHORIZATION",
+    accountId: "ACC-001",
+    authorizationId: "Auth-B",
+    amount: 9000n,
+    bookedDay: 5,
+    valueDate: 5,
+});
 
-for (let day = 1; day <= 5; day++) {
-    console.log(
-        `Day ${day} balance:`,
-        ledger.getBalance("ACC-001", day as Day),
-    );
-}
+console.log("\nE8 — Authorization Auth-B");
+console.log("Result:", e8);
+console.log("Auth-B:", ledger.getAuthorization("Auth-B"));
+console.log("Ledger balance:", ledger.getBalance("ACC-001", 5));
+console.log("Active holds:", ledger.getActiveHolds("ACC-001"));
+console.log("Available balance:", ledger.getAvailableBalance("ACC-001", 5));
