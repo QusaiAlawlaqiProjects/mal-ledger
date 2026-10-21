@@ -11,17 +11,36 @@ export interface Account {
     openingBalance: bigint;
 }
 
-export type EventType = "CREDIT" | "DEBIT";
+export type EventType = "CREDIT" | "DEBIT" | "AUTHORIZATION";
 
-export interface LedgerEvent {
+export interface BaseEvent {
     id: string;
-    type: EventType;
     accountId: AccountId;
-    amount: bigint;
-
-    bookedDay: Day; // When the bank records the event.
-    valueDate: Day; // When it financially takes effect.
+    bookedDay: Day;
+    valueDate: Day;
 }
+
+export interface CreditEvent extends BaseEvent {
+    type: "CREDIT";
+    amount: bigint;
+}
+
+export interface DebitEvent extends BaseEvent {
+    type: "DEBIT";
+    amount: bigint;
+}
+
+// Authorization Event
+export interface AuthorizationEvent extends BaseEvent {
+    type: "AUTHORIZATION";
+    authorizationId: string;
+    amount: bigint;
+}
+
+export type LedgerEvent =
+    | CreditEvent
+    | DebitEvent
+    | AuthorizationEvent;
 
 export interface LedgerEntry {
     id: string;
@@ -31,4 +50,14 @@ export interface LedgerEntry {
     amount: bigint; // Signed amount in minor units.
     bookedDay: Day;
     valueDate: Day;
+}
+
+// Authorization Types
+export type AuthorizationStatus = "APPROVED" | "DECLINED";
+
+export interface AuthorizationState {
+    authorizationId: string;
+    accountId: AccountId;
+    amount: bigint;
+    status: AuthorizationStatus;
 }

@@ -34,10 +34,35 @@ ledger.process({
     valueDate: 1,
 });
 
-console.log("Events:", ledger.getEvents());
-console.log("Entries:", ledger.getEntries());
+
+ledger.process({
+    id: "E3",
+    type: "AUTHORIZATION",
+    accountId: "ACC-001",
+    authorizationId: "Auth-A",
+    amount: 20000n,
+    bookedDay: 2,
+    valueDate: 2,
+});
+
+console.log("\nDay 2 — Authorization:");
 
 console.log(
-    "Day 1 closing balance (AED minor units):",
-    ledger.getBalance("ACC-001", 1),
+    "Ledger balance:",
+    ledger.getBalance("ACC-001", 2),
+);
+
+console.log(
+    "Active holds:",
+    ledger.getActiveHolds("ACC-001"),
+);
+
+console.log(
+    "Available balance:",
+    ledger.getAvailableBalance("ACC-001", 2),
+);
+
+console.log(
+    "Auth-A:",
+    ledger.getAuthorization("Auth-A"),
 );
