@@ -11,7 +11,7 @@ export interface Account {
     openingBalance: bigint;
 }
 
-export type EventType = "CREDIT" | "DEBIT" | "AUTHORIZATION" | "SETTLEMENT";
+export type EventType = "CREDIT" | "DEBIT" | "AUTHORIZATION" | "SETTLEMENT" | "REVERSAL";
 
 export interface BaseEvent {
     id: string;
@@ -44,11 +44,18 @@ export interface SettlementEvent extends BaseEvent {
     amount: bigint;
 }
 
+// Reversal Event
+export interface ReversalEvent extends BaseEvent {
+    type: "REVERSAL";
+    originalEventId: string;
+}
+
 export type LedgerEvent =
     | CreditEvent
     | DebitEvent
     | AuthorizationEvent
-    | SettlementEvent;
+    | SettlementEvent
+    | ReversalEvent;
 
 export interface LedgerEntry {
     id: string;

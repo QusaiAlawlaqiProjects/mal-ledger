@@ -116,151 +116,249 @@ export class Ledger {
 
 
     public process(event: LedgerEvent): ProcessingResult {
-        const reject = (message: string): ProcessingResult => {
-            const result: ProcessingResult = {
+        // Validate event ID
+        if (this.eventIds.has(event.id)) {
+            return {
                 eventId: event.id,
                 accepted: false,
-                message,
+                message: `Duplicate event ID: ${event.id}`,
+            };
+        }
+
+        // Validate account
+        if (!this.accounts.has(event.accountId)) {
+            return {
+                eventId: event.id,
+                accepted: false,
+                message: `Unknown account: ${event.accountId}`,
+            };
+        }
+
+        // Reversals do not have an amount
+        if (event.type !== "REVERSAL" && event.amount <= 0n) {
+            return {
+                eventId: event.id,
+                accepted: false,
+                message: "Amount must be positive",
+            };
+        }
+
+        // AUTHORIZATION
+        if (event.type === "AUTHORIZATION") {
+            if (this.authorizations.has(event.authorizationId)) {
+                return {
+                    eventId: event.id,
+                    accepted: false,
+                    message: `Duplicate authorization ID: ${event.authorizationId}`,
+                };
+            }
+
+            const available = this.getAvailableBalance(
+                event.accountId,
+                event.bookedDay,
+            );
+
+            const status =
+                available >= event.amount ? "APPROVED" : "DECLINED";
+
+            const authorization: AuthorizationState = {
+                authorizationId: event.authorizationId,
+                accountId: event.accountId,
+                amount: event.amount,
+                status,
             };
 
-            this.results.push(Object.freeze({ ...result }));
-            return result;
-        };
+            this.authorizations.set(
+                event.authorizationId,
+                Object.freeze({ ...authorization }),
+            );
 
-        if (this.eventIds.has(event.id)) {
-            return reject(`Duplicate event ID: ${event.id}`);
+            this.events.push(Object.freeze({ ...event }));
+            this.eventIds.add(event.id);
+
+            return {
+                eventId: event.id,
+                accepted: true,
+                message: `Authorization ${status.toLowerCase()}`,
+            };
         }
 
-        if (!this.accounts.has(event.accountId)) {
-            return reject(`Unknown account: ${event.accountId}`);
-        }
+        // SETTLEMENT
+        if (event.type === "SETTLEMENT") {
+            const authorization = this.authorizations.get(
+                event.authorizationId,
+            );
 
-        if (event.amount <= 0n) {
-            return reject("Amount must be positive");
-        }
-
-        let entry: LedgerEntry | undefined;
-        let nextAuthorization: AuthorizationState | undefined;
-        let message = "";
-
-        switch (event.type) {
-            case "CREDIT":
-            case "DEBIT": {
-                entry = {
-                    id: `entry-${event.id}`,
+            if (!authorization) {
+                return {
                     eventId: event.id,
-                    accountId: event.accountId,
-                    type: event.type,
-                    amount:
-                        event.type === "CREDIT"
-                            ? event.amount
-                            : -event.amount,
-                    bookedDay: event.bookedDay,
-                    valueDate: event.valueDate,
+                    accepted: false,
+                    message: `Unknown authorization: ${event.authorizationId}`,
                 };
-
-                message = `${event.type} posted`;
-                break;
             }
 
-            case "AUTHORIZATION": {
-                if (this.authorizations.has(event.authorizationId)) {
-                    return reject(
-                        `Duplicate authorization ID: ${event.authorizationId}`,
-                    );
-                }
-
-                const available = this.getAvailableBalance(
-                    event.accountId,
-                    event.bookedDay,
-                );
-
-                const status =
-                    available >= event.amount
-                        ? "APPROVED"
-                        : "DECLINED";
-
-                nextAuthorization = {
-                    authorizationId: event.authorizationId,
-                    accountId: event.accountId,
-                    amount: event.amount,
-                    status,
+            if (authorization.accountId !== event.accountId) {
+                return {
+                    eventId: event.id,
+                    accepted: false,
+                    message: "Authorization account mismatch",
                 };
-
-                message = `Authorization ${status.toLowerCase()}`;
-                break;
             }
 
-            case "SETTLEMENT": {
-                const authorization = this.authorizations.get(
-                    event.authorizationId,
-                );
-
-                if (!authorization) {
-                    return reject(
-                        `Unknown authorization: ${event.authorizationId}`,
-                    );
-                }
-
-                if (authorization.accountId !== event.accountId) {
-                    return reject("Authorization account mismatch");
-                }
-
-                if (authorization.status !== "APPROVED") {
-                    return reject(
-                        `Authorization is not active: ${event.authorizationId}`,
-                    );
-                }
-
-                if (event.amount > authorization.amount) {
-                    return reject(
-                        "Settlement exceeds authorized amount",
-                    );
-                }
-
-                entry = {
-                    id: `entry-${event.id}`,
+            if (authorization.status !== "APPROVED") {
+                return {
                     eventId: event.id,
-                    accountId: event.accountId,
-                    type: "SETTLEMENT",
-                    amount: -event.amount,
-                    bookedDay: event.bookedDay,
-                    valueDate: event.valueDate,
+                    accepted: false,
+                    message: "Authorization is not active",
                 };
+            }
 
-                nextAuthorization = {
+            if (event.amount > authorization.amount) {
+                return {
+                    eventId: event.id,
+                    accepted: false,
+                    message: "Settlement exceeds authorized amount",
+                };
+            }
+
+            const entry: LedgerEntry = {
+                id: `entry-${event.id}`,
+                eventId: event.id,
+                accountId: event.accountId,
+                type: "SETTLEMENT",
+                amount: -event.amount,
+                bookedDay: event.bookedDay,
+                valueDate: event.valueDate,
+            };
+
+            this.events.push(Object.freeze({ ...event }));
+            this.entries.push(Object.freeze({ ...entry }));
+            this.eventIds.add(event.id);
+
+            this.authorizations.set(
+                event.authorizationId,
+                Object.freeze({
                     ...authorization,
                     status: "SETTLED",
                     settlementAmount: event.amount,
-                };
-
-                message = "Settlement posted";
-                break;
-            }
-        }
-
-        // Commit only after the event has passed validation.
-        this.events.push(Object.freeze({ ...event }));
-        this.eventIds.add(event.id);
-
-        if (entry) {
-            this.entries.push(Object.freeze({ ...entry }));
-        }
-
-        if (nextAuthorization) {
-            this.authorizations.set(
-                nextAuthorization.authorizationId,
-                Object.freeze({ ...nextAuthorization }),
+                }),
             );
+
+            return {
+                eventId: event.id,
+                accepted: true,
+                message: `Settlement completed for ${event.authorizationId}`,
+            };
         }
 
-        const result: ProcessingResult = {
+        // REVERSAL
+        if (event.type === "REVERSAL") {
+            let originalEntry: LedgerEntry | undefined;
+
+            // Find the original financial entry
+            for (const entry of this.entries) {
+                if (entry.eventId === event.originalEventId) {
+                    originalEntry = entry;
+                    break;
+                }
+            }
+
+            if (!originalEntry) {
+                return {
+                    eventId: event.id,
+                    accepted: false,
+                    message: `Original entry not found: ${event.originalEventId}`,
+                };
+            }
+
+            if (originalEntry.accountId !== event.accountId) {
+                return {
+                    eventId: event.id,
+                    accepted: false,
+                    message: "Reversal account mismatch",
+                };
+            }
+
+            if (originalEntry.type === "REVERSAL") {
+                return {
+                    eventId: event.id,
+                    accepted: false,
+                    message: "Cannot reverse a reversal",
+                };
+            }
+
+            // Prevent reversing the same transaction twice
+            for (const previousEvent of this.events) {
+                if (
+                    previousEvent.type === "REVERSAL" &&
+                    previousEvent.originalEventId === event.originalEventId
+                ) {
+                    return {
+                        eventId: event.id,
+                        accepted: false,
+                        message: "Original entry already reversed",
+                    };
+                }
+            }
+
+            // Preserve the original value date
+            if (event.valueDate !== originalEntry.valueDate) {
+                return {
+                    eventId: event.id,
+                    accepted: false,
+                    message: "Reversal must use original value date",
+                };
+            }
+
+            // Create a compensating entry
+            const reversalEntry: LedgerEntry = {
+                id: `entry-${event.id}`,
+                eventId: event.id,
+                accountId: event.accountId,
+                type: "REVERSAL",
+                amount: -originalEntry.amount,
+                bookedDay: event.bookedDay,
+                valueDate: event.valueDate,
+            };
+
+            this.events.push(Object.freeze({ ...event }));
+            this.entries.push(Object.freeze({ ...reversalEntry }));
+            this.eventIds.add(event.id);
+
+            return {
+                eventId: event.id,
+                accepted: true,
+                message: `Reversed ${event.originalEventId}`,
+            };
+        }
+
+        // CREDIT / DEBIT
+        // These are the only remaining event types.
+        const signedAmount =
+            event.type === "CREDIT"
+                ? event.amount
+                : -event.amount;
+
+        const entry: LedgerEntry = {
+            id: `entry-${event.id}`,
             eventId: event.id,
-            accepted: true,
-            message,
+            accountId: event.accountId,
+            type: event.type,
+            amount: signedAmount,
+            bookedDay: event.bookedDay,
+            valueDate: event.valueDate,
         };
 
-        this.results.push(Object.freeze({ ...result }));
-        return result;
+        this.events.push(Object.freeze({ ...event }));
+        this.entries.push(Object.freeze({ ...entry }));
+        this.eventIds.add(event.id);
+
+        return {
+            eventId: event.id,
+            accepted: true,
+            message: `${event.type} posted successfully`,
+        };
     }
+
+
 }

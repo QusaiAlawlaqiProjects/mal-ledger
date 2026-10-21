@@ -33,3 +33,7 @@ Updates:
 Time: 21/10/2026 - 10:52pm 
 Updates: 
 - E8: Verified that the existing authorization logic correctly declines Auth-B due to insufficient funds, without requiring any code changes.
+
+Time: 21/10/2026 - 11:02pm 
+Updates: 
+- E9: Implemented append-only reversals using compensating entries, preserving the original transaction and restoring value-dated balances without changing previous authorization decisions.

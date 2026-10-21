@@ -93,9 +93,34 @@ const e8 = ledger.process({
     valueDate: 5,
 });
 
-console.log("\nE8 — Authorization Auth-B");
-console.log("Result:", e8);
-console.log("Auth-B:", ledger.getAuthorization("Auth-B"));
-console.log("Ledger balance:", ledger.getBalance("ACC-001", 5));
-console.log("Active holds:", ledger.getActiveHolds("ACC-001"));
-console.log("Available balance:", ledger.getAvailableBalance("ACC-001", 5));
+const e9 = ledger.process({
+    id: "E9",
+    type: "REVERSAL",
+    accountId: "ACC-001",
+    originalEventId: "E7",
+    bookedDay: 6,
+    valueDate: 2,
+});
+
+console.log("\nE9 — Reversal of E7");
+console.log("Result:", e9);
+
+console.log(
+    "Day 2 balance:",
+    ledger.getBalance("ACC-001", 2),
+);
+
+console.log(
+    "Day 6 balance:",
+    ledger.getBalance("ACC-001", 6),
+);
+
+console.log(
+    "Auth-B:",
+    ledger.getAuthorization("Auth-B"),
+);
+
+console.log(
+    "Ledger entries:",
+    ledger.getEntries().length,
+);
