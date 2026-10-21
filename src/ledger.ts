@@ -16,6 +16,8 @@ export class Ledger {
     private readonly eventIds = new Set<string>();
     private readonly results: ProcessingResult[] = [];
 
+    private feeSequence = 0;
+
     // Authorization
     private readonly authorizations =
         new Map<string, AuthorizationState>();
@@ -112,6 +114,110 @@ export class Ledger {
         }
 
         return results;
+    }
+
+
+    public getBalanceAsOf(
+        accountId: AccountId,
+        valueDay: Day,
+        asOfBookedDay: Day,
+    ): bigint {
+        const account = this.accounts.get(accountId);
+
+        if (!account) {
+            throw new Error(`Unknown account: ${accountId}`);
+        }
+
+        let balance = account.openingBalance;
+
+        for (const entry of this.entries) {
+            if (
+                entry.accountId === accountId &&
+                entry.valueDate <= valueDay &&
+                entry.bookedDay <= asOfBookedDay
+            ) {
+                balance += entry.amount;
+            }
+        }
+
+        return balance;
+    }
+
+
+    public reconcileOverdraftFees(
+        accountId: AccountId,
+        bookedDay: Day,
+    ): void {
+        const account = this.accounts.get(accountId);
+
+        if (!account) {
+            throw new Error(`Unknown account: ${accountId}`);
+        }
+
+        // AED 25.00 in minor units.
+        const feeAmount = 2500n;
+
+        // Only assess days that have already occurred.
+        for (let day = 1; day <= bookedDay; day++) {
+            const valueDay = day as Day;
+
+            // Calculate balance excluding existing fee entries.
+            // We reconcile fees separately to avoid double counting.
+            let balance = account.openingBalance;
+
+            for (const entry of this.entries) {
+                if (
+                    entry.accountId === accountId &&
+                    entry.valueDate <= valueDay &&
+                    entry.bookedDay <= bookedDay &&
+                    entry.type !== "OVERDRAFT_FEE" &&
+                    entry.type !== "FEE_REFUND"
+                ) {
+                    balance += entry.amount;
+                }
+            }
+
+            const shouldCharge = balance < 0n;
+
+            // Determine the net fee already assessed for this day.
+            let existingFee = 0n;
+
+            for (const entry of this.entries) {
+                if (
+                    entry.accountId === accountId &&
+                    entry.valueDate === valueDay &&
+                    (entry.type === "OVERDRAFT_FEE" ||
+                        entry.type === "FEE_REFUND")
+                ) {
+                    existingFee += entry.amount;
+                }
+            }
+
+            const expectedFee = shouldCharge ? -feeAmount : 0n;
+            const adjustment = expectedFee - existingFee;
+
+            // No change needed.
+            if (adjustment === 0n) {
+                continue;
+            }
+
+            this.feeSequence++;
+
+            const entry: LedgerEntry = {
+                id: `fee-${this.feeSequence}`,
+                eventId: `internal-fee-${this.feeSequence}`,
+                accountId,
+                type:
+                    adjustment < 0n
+                        ? "OVERDRAFT_FEE"
+                        : "FEE_REFUND",
+                amount: adjustment,
+                bookedDay,
+                valueDate: valueDay,
+            };
+
+            this.entries.push(Object.freeze({ ...entry }));
+        }
     }
 
 

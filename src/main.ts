@@ -93,6 +93,30 @@ const e8 = ledger.process({
     valueDate: 5,
 });
 
+
+console.log("\n--- Day 5: Overdraft Fee Assessment ---");
+
+console.log(
+    "Balance before fees:",
+    ledger.getBalance("ACC-001", 5),
+);
+
+ledger.reconcileOverdraftFees("ACC-001", 5);
+
+for (const entry of ledger.getEntries()) {
+    if (entry.type === "OVERDRAFT_FEE") {
+        console.log(
+            `Day ${entry.valueDate}: AED ${Number(-entry.amount) / 100} fee`,
+        );
+    }
+}
+
+console.log(
+    "Balance after fees:",
+    ledger.getBalance("ACC-001", 5),
+);
+
+
 const e9 = ledger.process({
     id: "E9",
     type: "REVERSAL",
@@ -102,25 +126,29 @@ const e9 = ledger.process({
     valueDate: 2,
 });
 
-console.log("\nE9 — Reversal of E7");
-console.log("Result:", e9);
+console.log("\n--- Day 6: Overdraft Fee Reconciliation ---");
 
 console.log(
-    "Day 2 balance:",
-    ledger.getBalance("ACC-001", 2),
+    "Balance before refunds:",
+    ledger.getBalance("ACC-001", 6),
 );
 
+ledger.reconcileOverdraftFees("ACC-001", 6);
+
+for (const entry of ledger.getEntries()) {
+    if (entry.type === "FEE_REFUND") {
+        console.log(
+            `Day ${entry.valueDate}: AED ${Number(entry.amount) / 100} refunded`,
+        );
+    }
+}
+
 console.log(
-    "Day 6 balance:",
+    "Final balance:",
     ledger.getBalance("ACC-001", 6),
 );
 
 console.log(
-    "Auth-B:",
-    ledger.getAuthorization("Auth-B"),
-);
-
-console.log(
-    "Ledger entries:",
-    ledger.getEntries().length,
+    "Auth-B status:",
+    ledger.getAuthorization("Auth-B")?.status,
 );

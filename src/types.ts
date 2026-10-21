@@ -11,7 +11,8 @@ export interface Account {
     openingBalance: bigint;
 }
 
-export type EventType = "CREDIT" | "DEBIT" | "AUTHORIZATION" | "SETTLEMENT" | "REVERSAL";
+export type EventType = "CREDIT" | "DEBIT" | "AUTHORIZATION" | "SETTLEMENT" | "REVERSAL" | "OVERDRAFT_FEE"
+    | "FEE_REFUND";
 
 export interface BaseEvent {
     id: string;

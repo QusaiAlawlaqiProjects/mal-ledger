@@ -37,3 +37,7 @@ Updates:
 Time: 21/10/2026 - 11:02pm 
 Updates: 
 - E9: Implemented append-only reversals using compensating entries, preserving the original transaction and restoring value-dated balances without changing previous authorization decisions.
+
+Time: 21/10/2026 - 11:16pm 
+Updates: 
+Overdraft fees: Added AED 25 daily fee assessment, append-only refunds after E9, and replay output showing balances before and after reconciliation.
