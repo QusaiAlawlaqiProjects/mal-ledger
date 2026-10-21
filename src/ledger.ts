@@ -220,6 +220,95 @@ export class Ledger {
         }
     }
 
+    calculateInterest(
+        accountId: AccountId,
+    ): {
+        day: Day;
+        closingBalance: bigint;
+        interestNumerator: bigint;
+    }[] {
+        const account = this.accounts.get(accountId);
+
+        if (!account) {
+            throw new Error("Account not found");
+        }
+
+        const results: {
+            day: Day;
+            closingBalance: bigint;
+            interestNumerator: bigint;
+        }[] = [];
+
+        for (let day = 1; day <= 6; day++) {
+            const valueDay = day as Day;
+            const closingBalance = this.getBalance(accountId, valueDay);
+
+            // 0.04% = 4 / 10000.
+            // Keep the numerator to avoid daily rounding loss.
+            const interestNumerator =
+                closingBalance > 0n ? closingBalance * 4n : 0n;
+
+            results.push({
+                day: valueDay,
+                closingBalance,
+                interestNumerator,
+            });
+        }
+
+        return results;
+    }
+
+
+    capitalizeInterest(accountId: AccountId): bigint {
+        const account = this.accounts.get(accountId);
+
+        if (!account) {
+            throw new Error("Account not found");
+        }
+
+        // Prevent capitalization from being posted twice.
+        for (const entry of this.entries) {
+            if (
+                entry.accountId === accountId &&
+                entry.type === "INTEREST"
+            ) {
+                throw new Error("Interest already capitalized");
+            }
+        }
+
+        const dailyInterest = this.calculateInterest(accountId);
+
+        let totalNumerator = 0n;
+
+        for (const day of dailyInterest) {
+            totalNumerator += day.interestNumerator;
+        }
+
+        // Round half-up once, after accumulating all six days.
+        const totalInterest =
+            (totalNumerator + 5000n) / 10000n;
+
+        if (totalInterest === 0n) {
+            return 0n;
+        }
+
+        const entry: LedgerEntry = {
+            id: `interest-${accountId}`,
+            eventId: `internal-interest-${accountId}`,
+            accountId,
+            type: "INTEREST",
+            amount: totalInterest,
+            bookedDay: 6,
+            valueDate: 6,
+        };
+
+        this.entries.push(Object.freeze({ ...entry }));
+
+        return totalInterest;
+    }
+
+
+
 
     public process(event: LedgerEvent): ProcessingResult {
         // Validate event ID

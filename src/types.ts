@@ -12,7 +12,7 @@ export interface Account {
 }
 
 export type EventType = "CREDIT" | "DEBIT" | "AUTHORIZATION" | "SETTLEMENT" | "REVERSAL" | "OVERDRAFT_FEE"
-    | "FEE_REFUND";
+    | "FEE_REFUND" | "INTEREST";
 
 export interface BaseEvent {
     id: string;

@@ -1,5 +1,6 @@
+
 import { Ledger } from "./ledger.js";
-import type { Account, Day } from "./types.js";
+import type { Account } from "./types.js";
 import { splitAmount } from "./money.js";
 
 const accounts: Account[] = [
@@ -35,7 +36,6 @@ ledger.process({
     valueDate: 1,
 });
 
-
 ledger.process({
     id: "E3",
     type: "AUTHORIZATION",
@@ -64,7 +64,8 @@ ledger.process({
     bookedDay: 4,
     valueDate: 4,
 });
-// E6 — Day 4 settlement with unknown authorization
+
+// E6 — Settlement with unknown authorization
 ledger.process({
     id: "E6",
     type: "SETTLEMENT",
@@ -75,7 +76,7 @@ ledger.process({
     valueDate: 4,
 });
 
-const e7 = ledger.process({
+ledger.process({
     id: "E7",
     type: "DEBIT",
     accountId: "ACC-001",
@@ -84,7 +85,7 @@ const e7 = ledger.process({
     valueDate: 2,
 });
 
-const e8 = ledger.process({
+ledger.process({
     id: "E8",
     type: "AUTHORIZATION",
     accountId: "ACC-001",
@@ -94,7 +95,10 @@ const e8 = ledger.process({
     valueDate: 5,
 });
 
-const e9 = ledger.process({
+// Assess overdraft fees after E7
+ledger.reconcileOverdraftFees("ACC-001", 5);
+
+ledger.process({
     id: "E9",
     type: "REVERSAL",
     accountId: "ACC-001",
@@ -103,12 +107,14 @@ const e9 = ledger.process({
     valueDate: 2,
 });
 
-console.log("\n--- E10: BHD Instalments ---");
+// Reconcile overdraft fees after the reversal
+ledger.reconcileOverdraftFees("ACC-001", 6);
 
+// E10 — BHD 10.000 in three instalments
 const instalments = splitAmount(10000n, 3);
 
 for (let i = 0; i < instalments.length; i++) {
-    const result = ledger.process({
+    ledger.process({
         id: `E10-${i + 1}`,
         type: "CREDIT",
         accountId: "ACC-002",
@@ -116,15 +122,27 @@ for (let i = 0; i < instalments.length; i++) {
         bookedDay: 5,
         valueDate: 5,
     });
-
-    console.log(
-        `Instalment ${i + 1}:`,
-        instalments[i],
-        result,
-    );
 }
 
-console.log(
-    "ACC-002 balance:",
-    ledger.getBalance("ACC-002", 6),
-);
+// Final interest results
+console.log("\n--- Daily Interest ---");
+
+for (const accountId of ["ACC-001", "ACC-002"] as const) {
+    const dailyInterest = ledger.calculateInterest(accountId);
+
+    console.log(`\n${accountId}`);
+
+    for (const day of dailyInterest) {
+        console.log(
+            `Day ${day.day}: Closing balance = ${day.closingBalance}, interest numerator = ${day.interestNumerator}`,
+        );
+    }
+
+    const capitalized = ledger.capitalizeInterest(accountId);
+
+    console.log("Capitalized interest:", capitalized);
+    console.log(
+        "Final balance:",
+        ledger.getBalance(accountId, 6),
+    );
+}

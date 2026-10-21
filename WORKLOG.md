@@ -45,3 +45,12 @@ Overdraft fees: Added AED 25 daily fee assessment, append-only refunds after E9,
 Time: 21/10/2026 - 11:21pm 
 Updates: 
 - E10: Implemented exact BHD instalment splitting using integer minor units, distributing the rounding remainder while preserving the original total of BHD 10.000.
+
+Time: 21/10/2026 - 11:38pm
+Update:
+- Implemented overdraft fee assessment and append-only refunds for reversed transactions.
+- Added historical balance reconciliation and duplicate fee prevention.
+- Implemented BHD installment splitting with accurate rounding using bigint.
+- Added daily interest calculation (0.04%) and Day 6 capitalization.
+- Added unit tests and updated the E1–E10 replay.
+- Verified final balances: AED 466.02 and BHD 10.008.
