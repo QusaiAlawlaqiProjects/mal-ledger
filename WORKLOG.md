@@ -41,3 +41,7 @@ Updates:
 Time: 21/10/2026 - 11:16pm 
 Updates: 
 Overdraft fees: Added AED 25 daily fee assessment, append-only refunds after E9, and replay output showing balances before and after reconciliation.
+
+Time: 21/10/2026 - 11:21pm 
+Updates: 
+- E10: Implemented exact BHD instalment splitting using integer minor units, distributing the rounding remainder while preserving the original total of BHD 10.000.

@@ -1,5 +1,6 @@
 import { Ledger } from "./ledger.js";
 import type { Account, Day } from "./types.js";
+import { splitAmount } from "./money.js";
 
 const accounts: Account[] = [
     {
@@ -93,30 +94,6 @@ const e8 = ledger.process({
     valueDate: 5,
 });
 
-
-console.log("\n--- Day 5: Overdraft Fee Assessment ---");
-
-console.log(
-    "Balance before fees:",
-    ledger.getBalance("ACC-001", 5),
-);
-
-ledger.reconcileOverdraftFees("ACC-001", 5);
-
-for (const entry of ledger.getEntries()) {
-    if (entry.type === "OVERDRAFT_FEE") {
-        console.log(
-            `Day ${entry.valueDate}: AED ${Number(-entry.amount) / 100} fee`,
-        );
-    }
-}
-
-console.log(
-    "Balance after fees:",
-    ledger.getBalance("ACC-001", 5),
-);
-
-
 const e9 = ledger.process({
     id: "E9",
     type: "REVERSAL",
@@ -126,29 +103,28 @@ const e9 = ledger.process({
     valueDate: 2,
 });
 
-console.log("\n--- Day 6: Overdraft Fee Reconciliation ---");
+console.log("\n--- E10: BHD Instalments ---");
 
-console.log(
-    "Balance before refunds:",
-    ledger.getBalance("ACC-001", 6),
-);
+const instalments = splitAmount(10000n, 3);
 
-ledger.reconcileOverdraftFees("ACC-001", 6);
+for (let i = 0; i < instalments.length; i++) {
+    const result = ledger.process({
+        id: `E10-${i + 1}`,
+        type: "CREDIT",
+        accountId: "ACC-002",
+        amount: instalments[i]!,
+        bookedDay: 5,
+        valueDate: 5,
+    });
 
-for (const entry of ledger.getEntries()) {
-    if (entry.type === "FEE_REFUND") {
-        console.log(
-            `Day ${entry.valueDate}: AED ${Number(entry.amount) / 100} refunded`,
-        );
-    }
+    console.log(
+        `Instalment ${i + 1}:`,
+        instalments[i],
+        result,
+    );
 }
 
 console.log(
-    "Final balance:",
-    ledger.getBalance("ACC-001", 6),
-);
-
-console.log(
-    "Auth-B status:",
-    ledger.getAuthorization("Auth-B")?.status,
+    "ACC-002 balance:",
+    ledger.getBalance("ACC-002", 6),
 );
