@@ -60,3 +60,10 @@ Update:
 - Added a regression test for cascading overdraft fees.
 - Fixed daily reconciliation to include previously assessed fees.
 - Preserved append-only fee adjustments and idempotent reconciliation.
+
+Time: 21/10/2026 - 11:50pm
+Update:
+- Added complete E1–E10 integration test covering all transaction types.
+- Verified authorization decisions, rejected settlement, backdated reversal, and overdraft reconciliation.
+- Validated currency precision, interest capitalization, and final account balances.
+- Confirmed all 30 tests pass across 9 test files.
