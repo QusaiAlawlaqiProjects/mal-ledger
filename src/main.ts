@@ -1,5 +1,5 @@
 import { Ledger } from "./ledger.js";
-import type { Account } from "./types.js";
+import type { Account, Day } from "./types.js";
 
 const accounts: Account[] = [
     {
@@ -74,13 +74,21 @@ ledger.process({
     valueDate: 4,
 });
 
-console.log("\nDay 4 results:");
+const e7 = ledger.process({
+    id: "E7",
+    type: "DEBIT",
+    accountId: "ACC-001",
+    amount: 62000n,
+    bookedDay: 5,
+    valueDate: 2,
+});
 
-console.log("Ledger balance:", ledger.getBalance("ACC-001", 4));
-console.log("Active holds:", ledger.getActiveHolds("ACC-001"));
-console.log(
-    "Available balance:",
-    ledger.getAvailableBalance("ACC-001", 4),
-);
-console.log("Auth-A:", ledger.getAuthorization("Auth-A"));
-console.log("Processing results:", ledger.getResults());
+console.log("\nE7 — Backdated Debit");
+console.log("Result:", e7);
+
+for (let day = 1; day <= 5; day++) {
+    console.log(
+        `Day ${day} balance:`,
+        ledger.getBalance("ACC-001", day as Day),
+    );
+}
