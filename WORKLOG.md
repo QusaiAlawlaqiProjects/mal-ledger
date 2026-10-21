@@ -54,3 +54,9 @@ Update:
 - Added daily interest calculation (0.04%) and Day 6 capitalization.
 - Added unit tests and updated the E1–E10 replay.
 - Verified final balances: AED 466.02 and BHD 10.008.
+
+Time: 21/10/2026 - 11:45pm
+Update:
+- Added a regression test for cascading overdraft fees.
+- Fixed daily reconciliation to include previously assessed fees.
+- Preserved append-only fee adjustments and idempotent reconciliation.
