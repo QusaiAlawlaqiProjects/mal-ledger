@@ -11,3 +11,10 @@ Updates:
 - Added active hold tracking.
 - Introduced available balance calculations.
 - Added tests for sufficient funds, insufficient funds, and overlapping holds.
+
+Time: 21/10/2026 - 10:42pm 
+Updates: 
+- E4: Added AED 400 credit using existing functionality; Day 3 balance reached AED 650.
+- E5: Implemented settlement processing, debited AED 185, and released the AED 200 authorization hold.
+- E6: Added rejection handling for unknown authorizations without affecting balances.
+- Introduced ProcessingResult and updated tests to validate accepted and rejected events.
